@@ -42,7 +42,7 @@ def get_token():
         username = raw_input("Username: ")
         password = getpass.getpass("Password: ")
         auth_body = {
-            "client_id": "lhMcNHozKwZIrzoKdnJbozgXGsxKEcxs2hB0cvON",
+            "client_id": "PaHuVmEKJNYoYOXcHpqrWc4CTUmTgvN0qMNwMPRw",
             "grant_type": "password",
             "username": username,
             "password": password
@@ -51,6 +51,7 @@ def get_token():
             r = requests.post(CARBONARA_URL + "/users/auth/token", data=auth_body)
         except:
             return "cannot get auth token"
+        
         if r.status_code != 200:
             return "cannot get auth token"
         token = r.json()["access_token"]
@@ -66,6 +67,7 @@ def get_token():
         printwarn("cannot save auth token")
         pass
     
+
 
 def exists():
     err = get_token()
@@ -165,24 +167,30 @@ def main():
         bi.addAdditionalInfo()
         bi.addStrings()
         bi.grabProcedures("radare2")
-        try:
-            data = json.dumps(bi.processAll(), indent=2)
-        except IOError as err:
-            printerr(err)
-            exit(1)
+        
+        data = bi.processAll()
         
         err = get_token()
         if token:
             headers = {"Authorization": "Bearer " + token}
+            binfile = open(bi.filename, "rb")
             try:
-                r = requests.post(CARBONARA_URL + "/api/report", headers=headers)
+                print(" >> Uploading to Carbonara...")
+                r = requests.post(CARBONARA_URL + "/api/report/", headers=headers, files={
+                    "binary":(os.path.basename(bi.filename), binfile.read()),
+                    "report":json.dumps(data)
+                    })
+                if r.status_code != 200:
+                    print r.content
+                    err = True
             except:
                 err = True
+            binfile.close()
         if err:
             if err != True:
                 printwarn(err)
             fname = os.path.basename(bi.filename) + ".analysis.json"
-            printwarn("failed to connect to Carbonara, the output will be saved in a file (" + fname + ")")
+            printwarn("failed to upload to Carbonara, the output will be saved in a file (" + fname + ")")
             outfile = open(fname, "w")
             outfile.write(data)
             outfile.close()
@@ -213,24 +221,21 @@ def main():
         if pdata == None:
             printerr("procedure not found")
             exit(1)
-        try:
-            data = json.dumps(pdata, indent=2)
-        except IOError as err:
-            printerr(err)
-            exit(1)
         err = get_token()
         if token:
             #TODO chech status code
             headers = {"Authorization": "Bearer " + token}
             try:
-                r = requests.post(CARBONARA_URL + "/api/procedure/update", headers=headers)
+                r = requests.post(CARBONARA_URL + "/api/procedure/update/", headers=headers, files={"report":json.dumps(data)})
+                if r.status_code != 200:
+                    err = True
             except:
                 err = True
         if err:
             if err != True:
                 printwarn(err)
             fname = os.path.basename(bi.filename) + "_" + hex(pdata["procedure"]["offset"]) + ".procedure.json"
-            printwarn("failed to connect to Carbonara, the output will be saved in a file (" + fname + ")")
+            printwarn("failed to upload to Carbonara, the output will be saved in a file (" + fname + ")")
             outfile = open(fname, "w")
             outfile.write(data)
             outfile.close()
