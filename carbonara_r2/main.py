@@ -9,7 +9,8 @@ import sys
 dirs = appdirs.AppDirs("carbonara_cli")
 token_path = os.path.join(os.path.dirname(dirs.user_config_dir), "carbonara_cli.token")
 
-CARBONARA_URL = "https://carbonara-backend.herokuapp.com"
+CARBONARA_URL = "http://carbonara-backend.herokuapp.com"
+CLIENT_ID="TzfN0E5s1aXIpgpc282hi975FBRoWY4Jb4ifpP3H"
 
 token = None
 
@@ -42,7 +43,7 @@ def get_token():
         username = raw_input("Username: ")
         password = getpass.getpass("Password: ")
         auth_body = {
-            "client_id": "PaHuVmEKJNYoYOXcHpqrWc4CTUmTgvN0qMNwMPRw",
+            "client_id": CLIENT_ID,
             "grant_type": "password",
             "username": username,
             "password": password
@@ -69,7 +70,9 @@ def get_token():
     
 
 
-def exists():
+
+
+def exists(md5):
     err = get_token()
     if err:
         printerr(err)
@@ -77,13 +80,14 @@ def exists():
     
     headers = {"Authorization": "Bearer " + token}
     try:
-        r = requests.head(CARBONARA_URL + "/api/program/?md5=" + bi.md5, headers=headers)
-    except:
+        r = requests.head(CARBONARA_URL + "/api/program/?md5=" + md5, headers=headers)
+    except Exception as ee:
+        print ee
         printerr("failed to connect to Carbonara")
         exit(1)
     if r.status_code == 404:
         return False
-    elif r.status_code == 200:
+    elif r.status_code == 200 or r.status_code == 204:
         return True
     else:
         printerr("invalid response")
@@ -196,18 +200,62 @@ def main():
             outfile.close()
 
     if "rename" in args:
-        if not exists():
+        if not exists(bi.md5):
             print " >> The binary is not present in the server, so it must be analyzed."
             analyzeAll()
         else:
             print " >> The binary is already on the server"
+            bi.grabProcedures("radare2")
+        
+        payload = {}
+        md5 = bi.md5
+        for p in bi.procs:
+            payload[md5+":"+str(p["offset"])] = 1
+        
+        r = None
+        headers = {"Authorization": "Bearer " + token}
+        err=False
+        try:
+            print(" >> Uploading to Carbonara...")
+            r = requests.post(CARBONARA_URL + "/api/simprocs/", headers=headers, json=payload)
+            if r.status_code != 200:
+                print r.content
+                err = True
+        except Exception as ee:
+            print ee
+            err = True
+        if err:
+            print "cannot get simprocs"
+            
+        
+        resp = r.json()
+        
+        for k in resp:
+            if len(resp[k]) == 0:
+                continue
+            off = int(k.split(":")[1])
+            
+            if resp[k][0]["match"] >= args["treshold"]:
+                print hex(off) + " --> " + resp[k][0]["name"] + "   (" + resp[k][0]["md5"] + ":" + hex(resp[k][0]["offset"]) + ")"
+        
+        a = raw_input(" >> Do you accept renaming? (Y, n): ")
+        if a == "" or a.lower() == "y":
+            
+            for k in resp:
+                if len(resp[k]) == 0:
+                    continue
+                off = int(k.split(":")[1])
+                if resp[k][0]["match"] >= args["treshold"]:
+                    bi.r2.cmd("afn " + resp[k][0]["name"] + " " + hex(off))
+            
+        
         ##TODO get analyzed funcs
         ##TODO radare rename
         exit(0)
 
 
     if "exists" in args:
-        if exists():
+        if exists(bi.md5):
             print LCYAN + " >> Result: " + CARBONARA_URL + "" + NC
         else:
             print LCYAN + " >> The binary is not present in the Carbonara server." + NC
