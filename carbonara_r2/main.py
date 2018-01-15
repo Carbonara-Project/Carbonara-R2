@@ -207,16 +207,20 @@ def main():
             print " >> The binary is already on the server"
             bi.grabProcedures("radare2")
         
+        procs_dict = {}
+        max_proc_name = 0
+        
         payload = {}
-        md5 = bi.md5
         for p in bi.procs:
-            payload[md5+":"+str(p["offset"])] = 1
+            payload[bi.md5+":"+str(p["offset"])] = 3
+            procs_dict[p["offset"]] = p["name"]
+            max_proc_name = max(max_proc_name, len(p["name"]))
         
         r = None
         headers = {"Authorization": "Bearer " + token}
         err=False
         try:
-            print(" >> Uploading to Carbonara...")
+            print(" >> Querying Carbonara...")
             r = requests.post(CARBONARA_URL + "/api/simprocs/", headers=headers, json=payload)
             if r.status_code != 200:
                 print r.content
@@ -229,28 +233,30 @@ def main():
             
         
         resp = r.json()
+        cmds = []
+        
+        print
         
         for k in resp:
             if len(resp[k]) == 0:
                 continue
             off = int(k.split(":")[1])
             
-            if resp[k][0]["match"] >= args["treshold"] and resp[k][0]["name"] != "fcn." + hex(resp[k][0]["offset"])[2:] and resp[k][0]["name"] != "sub_" + hex(resp[k][0]["offset"])[2:]:
-                print hex(off) + " --> " + resp[k][0]["name"] + "   (" + resp[k][0]["md5"] + ":" + hex(resp[k][0]["offset"]) + ")"
+            for r in resp[k]:
+                if r["match"] >= args["treshold"]:
+                    if r["name"] != "fcn." + hex(r["offset"])[2:] and r["name"] != "sub_" + hex(r["offset"])[2:]:
+                        print procs_dict[off] + " " * (max_proc_name - len(procs_dict[off])) + " --> " + r["name"] + "\t(" + r["md5"] + ":" + hex(r["offset"]) + ")"
+                        cmds.append("afn " + r["name"] + " " + hex(off))
+                        break
+                else:
+                    break
         
+        print
         a = raw_input(" >> Do you accept renaming? (Y, n): ")
         if a == "" or a.lower() == "y":
+            for c in cmds:
+                bi.r2.cmd(c)
             
-            for k in resp:
-                if len(resp[k]) == 0:
-                    continue
-                off = int(k.split(":")[1])
-                if resp[k][0]["match"] >= args["treshold"] and resp[k][0]["name"] != "fcn." + hex(resp[k][0]["offset"])[2:] and resp[k][0]["name"] != "sub_" + hex(resp[k][0]["offset"])[2:]:
-                    bi.r2.cmd("afn " + resp[k][0]["name"] + " " + hex(off))
-            
-        
-        ##TODO get analyzed funcs
-        ##TODO radare rename
         exit(0)
 
 
