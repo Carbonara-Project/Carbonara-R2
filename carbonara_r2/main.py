@@ -235,7 +235,7 @@ def main():
                 continue
             off = int(k.split(":")[1])
             
-            if resp[k][0]["match"] >= args["treshold"]:
+            if resp[k][0]["match"] >= args["treshold"] and resp[k][0]["name"] != "fcn." + hex(resp[k][0]["offset"])[2:] and resp[k][0]["name"] != "sub_" + hex(resp[k][0]["offset"])[2:]:
                 print hex(off) + " --> " + resp[k][0]["name"] + "   (" + resp[k][0]["md5"] + ":" + hex(resp[k][0]["offset"]) + ")"
         
         a = raw_input(" >> Do you accept renaming? (Y, n): ")
@@ -245,7 +245,7 @@ def main():
                 if len(resp[k]) == 0:
                     continue
                 off = int(k.split(":")[1])
-                if resp[k][0]["match"] >= args["treshold"]:
+                if resp[k][0]["match"] >= args["treshold"] and resp[k][0]["name"] != "fcn." + hex(resp[k][0]["offset"])[2:] and resp[k][0]["name"] != "sub_" + hex(resp[k][0]["offset"])[2:]:
                     bi.r2.cmd("afn " + resp[k][0]["name"] + " " + hex(off))
             
         
