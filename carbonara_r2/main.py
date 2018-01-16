@@ -95,7 +95,7 @@ def exists(md5):
 
 
 def printusage():
-    print LMAG_BG + "  usage  " + NC + LMAG + " radare2> " + NC + "#!pipe carbonara_r2 [OPTIONS]"
+    print LMAG_BG + "  usage  " + NC + LMAG + " radare2> " + NC + "#!pipe carbr2 [OPTIONS]"
     print
     print "OPTIONS:"
     print "   -h, --help                  show this help"

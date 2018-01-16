@@ -7,7 +7,7 @@ __email__ = "andreafioraldi@gmail.com"
 
 from setuptools import setup
 
-VER = "1.0.0"
+VER = "1.0.1"
 
 setup(
     name='carbonara_r2',
@@ -25,7 +25,10 @@ setup(
         'guanciale'
     ],
     entry_points={
-        'console_scripts': ['carbonara_r2 = carbonara_r2.main:main']
+        'console_scripts': [
+            'carbonara_r2 = carbonara_r2.main:main',
+            'carbr2 = carbonara_r2.main:main'
+        ]
     },
 )
 
