@@ -9,8 +9,9 @@ import sys
 dirs = appdirs.AppDirs("carbonara_cli")
 token_path = os.path.join(os.path.dirname(dirs.user_config_dir), "carbonara_cli.token")
 
-CARBONARA_URL = "http://carbonara-backend.herokuapp.com"
-CLIENT_ID="TzfN0E5s1aXIpgpc282hi975FBRoWY4Jb4ifpP3H"
+CARBONARA_URL = "https://carbonaraproject.com"
+#CARBONARA_URL = "http://localhost:8000"
+CLIENT_ID="2MBBuSf2kKNhHyDMjKi80jJPeJqzhYdzsOxzHM3z"
 
 token = None
 
@@ -24,19 +25,22 @@ def get_token():
         token_file.close()
     except:
         request_token = True
-    
+
     #verify token
-    if not request_token:
+    if request_token == False:
+        done = False
         headers = {"Authorization": "Bearer " + token}
         try:
             r = requests.head(CARBONARA_URL, headers=headers)
+            done = True
         except:
-            return "cannot verify auth token"
-        
-        if r.status_code == 401 or r.status_code == 403: #token expired
             request_token = True
-        elif r.status_code != 200:
-            return "cannot verify auth token"
+        
+        if done:
+            if r.status_code == 401 or r.status_code == 403: #token expired
+                request_token = True
+            elif r.status_code != 200:
+                return "cannot verify auth token"
     
     if request_token:
         print LCYAN + " >> Login to Carbonara " + NC
@@ -49,7 +53,7 @@ def get_token():
             "password": password
         }
         try:
-            r = requests.post(CARBONARA_URL + "/users/auth/token", data=auth_body)
+            r = requests.post(CARBONARA_URL + "/users/o/token/", data=auth_body)
         except:
             return "cannot get auth token"
         
@@ -67,7 +71,6 @@ def get_token():
     except:
         printwarn("cannot save auth token")
         pass
-    
 
 
 
@@ -180,6 +183,11 @@ def main():
             binfile = open(bi.filename, "rb")
             try:
                 print(" >> Uploading to Carbonara...")
+                remain = []
+                if len(data["procs"]) > 16:
+                    remain = data["procs"][16:]
+                    data["procs"] = data["procs"][:16]
+                
                 r = requests.post(CARBONARA_URL + "/api/report/", headers=headers, files={
                     "binary":(os.path.basename(bi.filename), binfile.read()),
                     "report":json.dumps(data)
@@ -187,6 +195,25 @@ def main():
                 if r.status_code != 200:
                     print r.content
                     err = True
+                else:
+                    while len(remain) > 0:
+                        if len(remain) > 16:
+                            remain = remain[16:]
+                            data["procs"] = remain[:16]
+                        else:
+                            remain = []
+                            data["procs"] = remain
+                        
+                        r = requests.post(CARBONARA_URL + "/api/procs-report/", headers=headers, files={
+                        "report":json.dumps({
+                            "md5": data["program"]["md5"],
+                            "procs": data["procs"]
+                            })
+                        })
+                        if r.status_code != 200:
+                            print r.content
+                            err = True
+                            break  
             except:
                 err = True
             binfile.close()
@@ -223,6 +250,8 @@ def main():
             print(" >> Querying Carbonara...")
             r = requests.post(CARBONARA_URL + "/api/simprocs/", headers=headers, json=payload)
             if r.status_code != 200:
+                print json.dumps(payload, indent=2)
+                print r
                 print r.content
                 err = True
         except Exception as ee:
@@ -244,7 +273,7 @@ def main():
             
             for r in resp[k]:
                 if r["match"] >= args["treshold"]:
-                    if r["name"] != "fcn." + hex(r["offset"])[2:] and r["name"] != "sub_" + hex(r["offset"])[2:]:
+                    if (not r["name"].startswith("fcn.")) and (hex(r["offset"])[2:] not in r["name"]) and (not r["name"].startswith("sub_")) and (hex(r["offset"])[2:] not in r["name"]):
                         print procs_dict[off] + " " * (max_proc_name - len(procs_dict[off])) + " --> " + r["name"] + "\t(" + r["md5"] + ":" + hex(r["offset"]) + ")"
                         cmds.append("afn " + r["name"] + " " + hex(off))
                         break
