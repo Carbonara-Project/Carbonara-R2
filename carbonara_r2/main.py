@@ -213,7 +213,7 @@ def main():
                         if r.status_code != 200:
                             print r.content
                             err = True
-                            break  
+                            break
             except:
                 err = True
             binfile.close()
@@ -234,51 +234,53 @@ def main():
             print " >> The binary is already on the server"
             bi.grabProcedures("radare2")
         
-        procs_dict = {}
-        max_proc_name = 0
-        
-        payload = {}
-        for p in bi.procs:
-            payload[bi.md5+":"+str(p["offset"])] = 3
-            procs_dict[p["offset"]] = p["name"]
-            max_proc_name = max(max_proc_name, len(p["name"]))
-        
-        r = None
-        headers = {"Authorization": "Bearer " + token}
-        err=False
-        try:
-            print(" >> Querying Carbonara...")
-            r = requests.post(CARBONARA_URL + "/api/simprocs/", headers=headers, json=payload)
-            if r.status_code != 200:
-                print json.dumps(payload, indent=2)
-                print r
-                print r.content
-                err = True
-        except Exception as ee:
-            print ee
-            err = True
-        if err:
-            print "cannot get simprocs"
-            
-        
-        resp = r.json()
         cmds = []
-        
-        print
-        
-        for k in resp:
-            if len(resp[k]) == 0:
-                continue
-            off = int(k.split(":")[1])
+               
+        for i in xrange(0, len(bi.procs), 16):
+            procs_dict = {}
+            max_proc_name = 0
             
-            for r in resp[k]:
-                if r["match"] >= args["treshold"]:
-                    if (not r["name"].startswith("fcn.")) and (hex(r["offset"])[2:] not in r["name"]) and (not r["name"].startswith("sub_")) and (hex(r["offset"])[2:] not in r["name"]):
-                        print procs_dict[off] + " " * (max_proc_name - len(procs_dict[off])) + " --> " + r["name"] + "\t(" + r["md5"] + ":" + hex(r["offset"]) + ")"
-                        cmds.append("afn " + r["name"] + " " + hex(off))
-                        break
-                else:
+            payload = {}
+            
+            for j in xrange(i, i+16):
+                if j >= len(bi.procs):
                     break
+                p = bi.procs[j]
+                payload[bi.md5+":"+str(p["offset"])] = 3
+                procs_dict[p["offset"]] = p["name"]
+                max_proc_name = max(max_proc_name, len(p["name"]))
+            
+            r = None
+            headers = {"Authorization": "Bearer " + token}
+            err=False
+            try:
+                print(" >> Querying Carbonara...")
+                r = requests.post(CARBONARA_URL + "/api/simprocs/", headers=headers, json=payload)
+                if r.status_code != 200:
+                    print r.content
+                    err = True
+            except Exception as ee:
+                #print ee
+                err = True
+            if err:
+                printwarn("cannot get simprocs")
+                continue
+            
+            resp = r.json()
+            
+            for k in resp:
+                if len(resp[k]) == 0:
+                    continue
+                off = int(k.split(":")[1])
+                
+                for r in resp[k]:
+                    if r["match"] >= args["treshold"]:
+                        if (not r["name"].startswith("fcn.")) and (hex(r["offset"])[2:] not in r["name"]) and (not r["name"].startswith("sub_")) and (hex(r["offset"])[2:] not in r["name"]):
+                            print procs_dict[off] + " " * (max_proc_name - len(procs_dict[off])) + " --> " + r["name"] + "\t(" + r["md5"] + ":" + hex(r["offset"]) + ")"
+                            cmds.append("afn " + r["name"] + " " + hex(off))
+                            break
+                    else:
+                        break
         
         print
         a = raw_input(" >> Do you accept renaming? (Y, n): ")
