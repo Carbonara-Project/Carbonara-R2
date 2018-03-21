@@ -101,11 +101,12 @@ def printusage():
     print LMAG_BG + "  usage  " + NC + LMAG + " radare2> " + NC + "#!pipe carbr2 [OPTIONS]"
     print
     print "OPTIONS:"
-    print "   -h, --help                  show this help"
-    print "   -e, --exists                check if the current opened file is already on the server"
-    print "   -p, --proc <name/offset>    analyze only a procedure and upgrade it's info on the server"
-    print "   -r, --rename                rename each procedure in the binary with the name of a similar procedure in our server if the matching treshold is >= TRESHOLD"
-    print "   -t, --treshold <int>        set TRESHOLD (optional, default 90)"
+    print "   -h, --help                          show this help"
+    print "   -e, --exists                        check if the current opened file is already on the server"
+    print "   -p, --proc <name/offset>            analyze only a procedure and upgrade it's info on the server"
+    print "   -r, --rename                        rename each procedure in the binary with the name of a similar procedure in our server if the matching treshold is >= TRESHOLD"
+    print "   -pr, --proc-rename <name/offset>    rename a single procedure if the matching treshold is >= TRESHOLD"
+    print "   -t, --treshold <int>                set TRESHOLD (optional, default 90)"
     print
 
 def main():
@@ -140,6 +141,12 @@ def main():
                 printerr("arg '--proc': expected one argument")
                 exit(1)
             args["proc"] = sys.argv[i+1]
+            i += 1
+        elif sys.argv[i] == "-pr" or sys.argv[i] == "--proc-rename":
+            if i == len(sys.argv) -1:
+                printerr("arg '--proc-rename': expected one argument")
+                exit(1)
+            args["proc-rename"] = sys.argv[i+1]
             i += 1
         elif sys.argv[i] == "-r" or sys.argv[i] == "--rename":
             args["rename"] = 1
@@ -226,6 +233,73 @@ def main():
             outfile.write(data)
             outfile.close()
 
+    if "proc-rename" in args:
+        if not exists(bi.md5):
+            print " >> The binary is not present in the server, so it must be analyzed."
+            analyzeAll()
+        else:
+            print " >> The binary is already on the server"
+            bi.grabProcedures("radare2")
+        
+        cmds = []
+       
+        pname = args["proc-rename"]
+        try:
+            paname = int(pname, 16)
+        except: pass
+       
+        for i in xrange(0, len(bi.procs)):
+            p = bi.procs[i]
+            if type(pname) == int and p["offset"] != pname: continue
+            if type(pname) == str and p["name"] != pname: continue
+            
+            procs_dict = {}
+            
+            payload = {}
+            
+            payload[bi.md5+":"+str(p["offset"])] = 3
+            procs_dict[p["offset"]] = p["name"]
+            max_proc_name = len(p["name"])
+            
+            r = None
+            headers = {"Authorization": "Bearer " + token}
+            err=False
+            try:
+                print(" >> Querying Carbonara...")
+                r = requests.post(CARBONARA_URL + "/api/simprocs/", headers=headers, json=payload)
+                if r.status_code != 200:
+                    print r.content
+                    err = True
+            except Exception as ee:
+                #print ee
+                err = True
+            if err:
+                printwarn("cannot get simprocs")
+                continue
+            
+            resp = r.json()
+            
+            for k in resp:
+                if len(resp[k]) == 0:
+                    continue
+                off = int(k.split(":")[1])
+                
+                for r in resp[k]:
+                    if r["match"] >= args["treshold"]:
+                        if (not r["name"].startswith("fcn.")) and (hex(r["offset"])[2:] not in r["name"]) and (not r["name"].startswith("sub_")) and (hex(r["offset"])[2:] not in r["name"]):
+                            print procs_dict[off] + " " * (max_proc_name - len(procs_dict[off])) + " --> " + r["name"] + "\t(" + r["md5"] + ":" + hex(r["offset"]) + ")"
+                            cmds.append("afn " + r["name"] + " " + hex(off))
+                            break
+                    else:
+                        break
+        
+        print
+        a = raw_input(" >> Do you accept renaming? (Y, n): ")
+        if a == "" or a.lower() == "y":
+            for c in cmds:
+                bi.r2.cmd(c)
+            
+        exit(0)      
     if "rename" in args:
         if not exists(bi.md5):
             print " >> The binary is not present in the server, so it must be analyzed."
